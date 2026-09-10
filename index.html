@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>汉诺塔递归可视化</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div>
+          <h1>汉诺塔递归可视化</h1>
+          <p><code>move_tower(n, A, C, B)</code></p>
+        </div>
+      </div>
+      <div class="stat-strip" aria-label="运行统计">
+        <div class="stat">
+          <span>当前步数</span>
+          <strong id="stat-move">0</strong>
+        </div>
+        <div class="stat">
+          <span>总步数</span>
+          <strong id="stat-total">0</strong>
+        </div>
+        <div class="stat">
+          <span>递归深度</span>
+          <strong id="stat-depth">0</strong>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="controls" aria-label="演示控制">
+        <div class="field">
+          <label for="disk-count">圆盘数 n</label>
+          <div class="stepper">
+            <button class="icon-button" id="btn-minus" type="button" aria-label="减少圆盘数">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+            </button>
+            <input id="disk-count" type="number" value="4" min="1" max="64" step="1" inputmode="numeric">
+            <button class="icon-button" id="btn-plus" type="button" aria-label="增加圆盘数">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="field speed-field">
+          <label for="speed">速度</label>
+          <input id="speed" type="range" min="1" max="10" value="5" step="1">
+          <span class="speed-scale"><i>慢</i><i id="speed-value">5</i><i>快</i></span>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-run" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true" id="run-icon-play">
+              <path d="M7 4.8v14.4a1 1 0 0 0 1.53.85l11-7.2a1 1 0 0 0 0-1.7l-11-7.2A1 1 0 0 0 7 4.8Z"/>
+            </svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true" id="run-icon-pause" hidden>
+              <path d="M9 5v14M15 5v14"/>
+            </svg>
+            <span id="run-label">开始演示</span>
+          </button>
+          <button class="btn" id="btn-step" type="button" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l10 7-10 7V5Zm11-2h3v18h-3V3Z"/></svg>
+            下一步
+          </button>
+          <button class="btn" id="btn-reset" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11A8 8 0 1 0 18.34 16M20 5v6h-6"/></svg>
+            重置
+          </button>
+        </div>
+      </section>
+
+      <div class="status-line" aria-live="polite">
+        <span class="status-dot" id="status-dot"></span>
+        <strong id="status-text">准备就绪</strong>
+        <span id="status-rule">移动 4 层塔：起点 A → 目标 C，借助 B</span>
+      </div>
+
+      <section class="layout" id="layout">
+        <div class="board-panel">
+          <div class="board-head">
+            <div class="peg-legend">
+              <span class="legend-a">A · 起点</span>
+              <span class="legend-b">B · 辅助</span>
+              <span class="legend-c">C · 目标</span>
+            </div>
+            <span class="board-caption" id="board-caption">尚未开始</span>
+          </div>
+          <div class="board-frame">
+            <svg id="board" viewBox="0 0 1000 540" preserveAspectRatio="xMidYMid meet" role="img" aria-label="汉诺塔三柱动画">
+              <title>汉诺塔盘面</title>
+              <rect class="stage-bg" x="6" y="6" width="988" height="528" rx="8"/>
+              <rect class="stage-bg-inner" x="30" y="120" width="940" height="360" rx="6"/>
+              <rect class="platform" x="88" y="448" width="824" height="14" rx="7"/>
+              <g class="pegs">
+                <rect x="196" y="176" width="8" height="274" rx="4"/>
+                <rect x="496" y="176" width="8" height="274" rx="4"/>
+                <rect x="796" y="176" width="8" height="274" rx="4"/>
+              </g>
+              <g class="peg-labels">
+                <text x="200" y="494">A</text>
+                <text x="200" y="515">起点</text>
+                <text x="500" y="494">B</text>
+                <text x="500" y="515">辅助</text>
+                <text x="800" y="494">C</text>
+                <text x="800" y="515">目标</text>
+              </g>
+              <g id="disk-layer"></g>
+              <g id="flight-layer"></g>
+            </svg>
+          </div>
+          <div
+            class="resize-handle board-resizer"
+            id="board-resizer"
+            role="separator"
+            tabindex="0"
+            aria-orientation="horizontal"
+            aria-label="调整动画展示高度"
+            title="拖动调整动画展示高度"
+          ><span></span></div>
+        </div>
+
+        <div
+          class="resize-handle sidebar-resizer"
+          id="sidebar-resizer"
+          role="separator"
+          tabindex="0"
+          aria-orientation="vertical"
+          aria-label="调整动画区与右侧栏宽度"
+          title="拖动调整右侧栏宽度"
+        ><span></span></div>
+
+        <aside class="insight">
+          <section class="panel" aria-label="递归调用栈">
+            <div class="panel-head">
+              <h2>递归调用栈</h2>
+              <span id="stack-note">当前活动帧</span>
+            </div>
+            <div class="stack-view" id="stack-view"></div>
+          </section>
+
+          <section class="panel" aria-label="递归函数结构">
+            <div class="panel-head">
+              <h2>move_tower 递归展开</h2>
+              <span id="path-note">展开规则</span>
+            </div>
+            <div class="path-view" id="path-view"></div>
+            <pre class="code" id="code-view"><code><span class="code-line c-keyword">void</span> <span class="code-line c-fn">move_tower</span><span class="code-line">(<span class="c-type">int</span> n, <span class="c-type">char</span> start, <span class="c-type">char</span> dest, <span class="c-type">char</span> aux)</span>
+<span class="code-line">{</span>
+  <span class="code-line"><span class="c-keyword">if</span> (n == <span class="c-num">1</span>)</span>
+  <span class="code-line">{</span>
+    <span class="code-line c-active-target" id="code-base">printf(<span class="c-str">"Move disk1 from %c to %c\n"</span>, start, dest);</span>
+  <span class="code-line">}</span>
+  <span class="code-line"><span class="c-keyword">else</span></span>
+  <span class="code-line">{</span>
+    <span class="code-line c-left" id="code-left">move_tower(n - <span class="c-num">1</span>, start, aux, dest); <span class="c-comment">// 左递归</span></span>
+    <span class="code-line c-active-target" id="code-move">printf(<span class="c-str">"Move disk%d from %c to %c\n"</span>, n, start, dest); <span class="c-comment">// 直接移动</span></span>
+    <span class="code-line c-right" id="code-right">move_tower(n - <span class="c-num">1</span>, aux, dest, start); <span class="c-comment">// 右递归</span></span>
+  <span class="code-line">}</span>
+<span class="code-line">}</span></code></pre>
+            <div
+              class="resize-handle code-resizer"
+              id="code-resizer"
+              role="separator"
+              tabindex="0"
+              aria-orientation="horizontal"
+              aria-label="调整代码展示高度"
+              title="拖动调整代码展示高度"
+            ><span></span></div>
+          </section>
+
+          <section class="panel" aria-label="移动记录">
+            <h2>移动记录</h2>
+            <ol class="move-log" id="move-log">
+              <li class="log-empty">尚无移动</li>
+            </ol>
+          </section>
+        </aside>
+      </section>
+    </main>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
