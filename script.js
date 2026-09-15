@@ -635,6 +635,7 @@
 
   function requestPreviousStep() {
     if (!sim || reverseAnimation || moveNumber < 1) return;
+    if (sim.currentMove && sim.paused) return;
     if (!sim.paused && sim.currentMove) {
       queuedStepAction = "prev";
       sim.pauseAfterMove = true;
@@ -883,6 +884,25 @@
   function requestStepForward() {
     if (reverseAnimation) return;
     if (sim && sim.done) return;
+    if (sim && sim.currentMove && sim.paused) {
+      queuedStepAction = null;
+      sim.pauseAfterMove = false;
+      sim.auto = false;
+      sim.singleStep = false;
+      finishCurrentMove();
+      if (BigInt(moveNumber) === totalMoves) {
+        sim.done = true;
+        sim.paused = false;
+      } else {
+        sim.done = false;
+        sim.paused = true;
+      }
+      renderStackAndCode();
+      updateStatus();
+      updateStats();
+      updateControls();
+      return;
+    }
     if (sim && !sim.paused && sim.currentMove) {
       queuedStepAction = "next";
       sim.pauseAfterMove = true;
@@ -1042,6 +1062,7 @@
     const done = Boolean(sim && sim.done);
     const running = Boolean(sim && !sim.done && !sim.paused);
     const stepping = Boolean(sim && !sim.auto && sim.currentMove);
+    const suspended = Boolean(sim && sim.currentMove && sim.paused);
     const reversing = Boolean(reverseAnimation);
 
     if (!sim) {
@@ -1073,7 +1094,8 @@
       reversing ||
         !sim ||
         moveNumber < 1 ||
-        stepping
+        stepping ||
+        suspended
     );
     el.btnRun.disabled = Boolean(reversing || stepping);
     el.btnReset.disabled = false;
