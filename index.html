@@ -7,151 +7,373 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
-      <div class="brand">
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="#intro" aria-label="回到页面顶部">
         <div class="brand-mark" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
-        <div>
-          <h1>汉诺塔递归可视化</h1>
-          <p><code>move_tower(n, A, C, B)</code></p>
+        <div class="brand-copy">
+          <strong>汉诺塔递归可视化</strong>
+          <span>从规则到代码的完整演示</span>
         </div>
-      </div>
-      <div class="stat-strip" aria-label="运行统计">
-        <div class="stat">
-          <span>当前步数</span>
-          <strong id="stat-move">0</strong>
-        </div>
-        <div class="stat">
-          <span>总步数</span>
-          <strong id="stat-total">0</strong>
-        </div>
-        <div class="stat">
-          <span>递归深度</span>
-          <strong id="stat-depth">0</strong>
-        </div>
-      </div>
-    </header>
+      </a>
+      <nav class="section-nav" id="section-nav" aria-label="页面章节">
+        <a class="active" href="#intro">问题介绍</a>
+        <a href="#rules">规则</a>
+        <a href="#principle">递归原理</a>
+        <a href="#lab">交互演示</a>
+      </nav>
+    </div>
+  </header>
 
+  <div class="app">
     <main>
-      <section class="controls" aria-label="演示控制">
-        <div class="field">
-          <label for="disk-count">圆盘数 n</label>
-          <div class="stepper">
-            <button class="icon-button" id="btn-minus" type="button" aria-label="减少圆盘数">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
-            </button>
-            <input id="disk-count" type="number" value="4" min="1" max="64" step="1" inputmode="numeric">
-            <button class="icon-button" id="btn-plus" type="button" aria-label="增加圆盘数">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            </button>
+      <section class="page-section hero-section reveal is-visible" id="intro">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="section-kicker">递归算法可视化教学 · 初学者友好</p>
+            <h1>把一摞圆盘，<br>一步步搬到目标柱</h1>
+            <p class="lead">
+              汉诺塔的目标很简单：把左边 A 柱上的全部圆盘，
+              在不违反规则的情况下全部移动到右边 C 柱。
+              它也是理解<strong>递归分解</strong>最直观的例子之一。
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#rules">先看规则</a>
+              <a class="btn" href="#lab">直接进入演示</a>
+            </div>
+            <ul class="hero-facts" aria-label="核心信息">
+              <li><strong>3</strong><span>根柱子</span></li>
+              <li><strong>1</strong><span>次移动一个盘</span></li>
+              <li><strong>2<sup>n</sup>−1</strong><span>最少移动次数</span></li>
+            </ul>
           </div>
-        </div>
 
-        <div class="field speed-field">
-          <label for="speed">速度</label>
-          <input id="speed" type="range" min="1" max="10" value="5" step="1">
-          <span class="speed-scale"><i>慢</i><i id="speed-value">5</i><i>快</i></span>
-        </div>
-
-        <div class="actions">
-          <button class="btn btn-primary" id="btn-run" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true" id="run-icon-play">
-              <path d="M7 4.8v14.4a1 1 0 0 0 1.53.85l11-7.2a1 1 0 0 0 0-1.7l-11-7.2A1 1 0 0 0 7 4.8Z"/>
+          <div class="hero-visual" aria-label="汉诺塔三根柱子的示意图">
+            <svg viewBox="0 0 560 400" role="img">
+              <title>汉诺塔初始状态</title>
+              <rect class="mini-stage" x="18" y="18" width="524" height="364" rx="18"></rect>
+              <rect class="mini-floor" x="60" y="318" width="440" height="14" rx="7"></rect>
+              <rect class="mini-peg" x="128" y="118" width="10" height="200" rx="5"></rect>
+              <rect class="mini-peg" x="275" y="118" width="10" height="200" rx="5"></rect>
+              <rect class="mini-peg" x="422" y="118" width="10" height="200" rx="5"></rect>
+              <rect class="mini-disk disk-1" x="103" y="278" width="60" height="34" rx="8"></rect>
+              <rect class="mini-disk disk-2" x="86" y="246" width="94" height="34" rx="8"></rect>
+              <rect class="mini-disk disk-3" x="69" y="214" width="128" height="34" rx="8"></rect>
+              <rect class="mini-disk disk-4" x="52" y="182" width="162" height="34" rx="8"></rect>
+              <text x="133" y="360">A</text>
+              <text x="280" y="360">B</text>
+              <text x="427" y="360">C</text>
             </svg>
-            <svg viewBox="0 0 24 24" aria-hidden="true" id="run-icon-pause" hidden>
-              <path d="M9 5v14M15 5v14"/>
-            </svg>
-            <span id="run-label">开始演示</span>
-          </button>
-          <button class="btn" id="btn-step" type="button" disabled>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l10 7-10 7V5Zm11-2h3v18h-3V3Z"/></svg>
-            下一步
-          </button>
-          <button class="btn" id="btn-reset" type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11A8 8 0 1 0 18.34 16M20 5v6h-6"/></svg>
-            重置
-          </button>
+            <div class="hero-visual-note">
+              <span>核心思想</span>
+              <strong>把一个复杂问题，拆成同样结构的小问题</strong>
+            </div>
+          </div>
         </div>
       </section>
 
-      <div class="status-line" aria-live="polite">
-        <span class="status-dot" id="status-dot"></span>
-        <strong id="status-text">准备就绪</strong>
-        <span id="status-rule">移动 4 层塔：起点 A → 目标 C，借助 B</span>
-      </div>
-
-      <section class="layout" id="layout">
-        <div class="board-panel">
-          <div class="board-head">
-            <div class="peg-legend">
-              <span class="legend-a">A · 起点</span>
-              <span class="legend-b">B · 辅助</span>
-              <span class="legend-c">C · 目标</span>
-            </div>
-            <span class="board-caption" id="board-caption">尚未开始</span>
+      <section class="page-section learning-section reveal" id="rules">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">第一部分 · 认识问题</p>
+            <h2>汉诺塔是什么？</h2>
+            <p>
+              汉诺塔是一个经典递归问题。规则不复杂，但每一步都必须为后面的移动保留正确顺序。
+            </p>
           </div>
-          <div class="board-frame">
-            <svg id="board" viewBox="0 0 1000 540" preserveAspectRatio="xMidYMid meet" role="img" aria-label="汉诺塔三柱动画">
-              <title>汉诺塔盘面</title>
-              <rect class="stage-bg" x="6" y="6" width="988" height="528" rx="8"/>
-              <rect class="stage-bg-inner" x="30" y="120" width="940" height="360" rx="6"/>
-              <rect class="platform" x="88" y="448" width="824" height="14" rx="7"/>
-              <g class="pegs">
-                <rect x="196" y="176" width="8" height="274" rx="4"/>
-                <rect x="496" y="176" width="8" height="274" rx="4"/>
-                <rect x="796" y="176" width="8" height="274" rx="4"/>
-              </g>
-              <g class="peg-labels">
-                <text x="200" y="494">A</text>
-                <text x="200" y="515">起点</text>
-                <text x="500" y="494">B</text>
-                <text x="500" y="515">辅助</text>
-                <text x="800" y="494">C</text>
-                <text x="800" y="515">目标</text>
-              </g>
-              <g id="disk-layer"></g>
-              <g id="flight-layer"></g>
-            </svg>
-          </div>
-          <div
-            class="resize-handle board-resizer"
-            id="board-resizer"
-            role="separator"
-            tabindex="0"
-            aria-orientation="horizontal"
-            aria-label="调整动画展示高度"
-            title="拖动调整动画展示高度"
-          ><span></span></div>
         </div>
 
-        <div
-          class="resize-handle sidebar-resizer"
-          id="sidebar-resizer"
-          role="separator"
-          tabindex="0"
-          aria-orientation="vertical"
-          aria-label="调整动画区与右侧栏宽度"
-          title="拖动调整右侧栏宽度"
-        ><span></span></div>
+        <div class="rules-grid">
+          <ol class="rule-list">
+            <li>
+              <span class="rule-index">01</span>
+              <div>
+                <strong>一次只能移动一个圆盘</strong>
+                <p>不能同时拿起两个圆盘，也不能一次拖动整摞圆盘。</p>
+              </div>
+            </li>
+            <li>
+              <span class="rule-index">02</span>
+              <div>
+                <strong>只能取柱子最上面的圆盘</strong>
+                <p>下面的圆盘被压住时不能移动，必须先处理它上方的盘子。</p>
+              </div>
+            </li>
+            <li>
+              <span class="rule-index">03</span>
+              <div>
+                <strong>大盘永远不能压在小盘上</strong>
+                <p>每根柱子从上到下都必须保持“小盘在上、大盘在下”。</p>
+              </div>
+            </li>
+            <li>
+              <span class="rule-index">04</span>
+              <div>
+                <strong>最终全部到达目标柱 C</strong>
+                <p>A 柱清空，所有圆盘按原顺序完整落在 C 柱上。</p>
+              </div>
+            </li>
+            <li>
+              <span class="rule-index">05</span>
+              <div>
+                <strong>最少需要 2<sup>n</sup>−1 步</strong>
+                <p>圆盘数为 n 时，最优解法的移动次数会随 n 快速增长。</p>
+              </div>
+            </li>
+          </ol>
 
-        <aside class="insight">
-          <section class="panel" aria-label="递归调用栈">
-            <div class="panel-head">
-              <h2>递归调用栈</h2>
-              <span id="stack-note">当前活动帧</span>
+          <aside class="rules-summary">
+            <p class="section-kicker">一句话记忆</p>
+            <h3>移动时永远守住“大盘在下，小盘在上”</h3>
+            <div class="stack-demo" aria-hidden="true">
+              <span class="stack-bar bar-1"></span>
+              <span class="stack-bar bar-2"></span>
+              <span class="stack-bar bar-3"></span>
+              <span class="stack-bar bar-4"></span>
             </div>
-            <div class="stack-view" id="stack-view"></div>
-          </section>
+            <p>
+              为了把最大的盘子移到目标柱，必须先把它上面的小盘子全部暂时移开。
+              这个过程，正好就是递归要解决的问题。
+            </p>
+          </aside>
+        </div>
+      </section>
 
-          <section class="panel" aria-label="递归函数结构">
-            <div class="panel-head">
-              <h2>move_tower 递归展开</h2>
-              <span id="path-note">展开规则</span>
+      <section class="page-section learning-section reveal" id="principle">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">第二部分 · 看懂递归</p>
+            <h2>移动 n 个盘，其实只需要想三件事</h2>
+            <p>
+              先不要盯着每一步。把问题缩小一层，递归结构就会变得非常清楚。
+            </p>
+          </div>
+        </div>
+
+        <div class="principle-grid">
+          <ol class="principle-steps">
+            <li>
+              <span>1</span>
+              <div>
+                <strong>先把上面 n−1 个盘移走</strong>
+                <code>move_tower(n−1, start, aux, dest)</code>
+                <p>让最大的盘上方变空，这样它才能移动。</p>
+              </div>
+            </li>
+            <li>
+              <span>2</span>
+              <div>
+                <strong>再移动最大的第 n 个盘</strong>
+                <code>start → dest</code>
+                <p>这一步是当前问题里唯一一次直接移动最大盘。</p>
+              </div>
+            </li>
+            <li>
+              <span>3</span>
+              <div>
+                <strong>最后把 n−1 个盘移回目标柱</strong>
+                <code>move_tower(n−1, aux, dest, start)</code>
+                <p>小问题完成后，大问题自然就完成了。</p>
+              </div>
+            </li>
+          </ol>
+
+          <div class="recursion-panel">
+            <div class="recursion-head">
+              <div>
+                <p class="section-kicker">n = 3 的递归拆解</p>
+                <h3>从一次调用，展开成一棵调用树</h3>
+              </div>
+              <button class="btn" id="btn-recursion-replay" type="button">重播</button>
             </div>
-            <div class="path-view" id="path-view"></div>
-            <pre class="code" id="code-view"><code><span class="code-line c-keyword">void</span> <span class="code-line c-fn">move_tower</span><span class="code-line">(<span class="c-type">int</span> n, <span class="c-type">char</span> start, <span class="c-type">char</span> dest, <span class="c-type">char</span> aux)</span>
+
+            <div class="recursion-stage" id="recursion-stage" data-step="0">
+              <div class="tree-root-node">move_tower(3, A, C, B)</div>
+              <div class="tree-connector" aria-hidden="true"></div>
+              <div class="tree-children">
+                <div class="tree-branch tree-left">
+                  <div class="tree-node">move_tower(2, A, B, C)</div>
+                  <div class="tree-substeps">
+                    <div class="tree-leaf">move_tower(1, A, C, B)</div>
+                    <div class="tree-move">移动 2 号盘：A → B</div>
+                    <div class="tree-leaf">move_tower(1, C, B, A)</div>
+                  </div>
+                </div>
+                <div class="tree-direct">直接移动 3 号盘：A → C</div>
+                <div class="tree-branch tree-right">
+                  <div class="tree-node">move_tower(2, B, C, A)</div>
+                  <div class="tree-substeps">
+                    <div class="tree-leaf">move_tower(1, B, A, C)</div>
+                    <div class="tree-move">移动 2 号盘：B → C</div>
+                    <div class="tree-leaf">move_tower(1, A, C, B)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p class="recursion-caption" id="recursion-caption" aria-live="polite">
+              从最大的问题开始：把 3 个盘从 A 移到 C。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section lab-section" id="lab">
+        <div class="lab-heading">
+          <div>
+            <p class="section-kicker">第三部分 · 交互实验室</p>
+            <h2>亲手推动每一步，同时观察递归</h2>
+            <p>
+              选择手动逐步或自动演示。盘面、调用栈、代码高亮和移动记录会始终同步。
+            </p>
+          </div>
+          <div class="stat-strip" aria-label="运行统计">
+            <div class="stat">
+              <span>当前步数</span>
+              <strong id="stat-move">0</strong>
+            </div>
+            <div class="stat">
+              <span>总步数</span>
+              <strong id="stat-total">0</strong>
+            </div>
+            <div class="stat">
+              <span>递归深度</span>
+              <strong id="stat-depth">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <section class="controls" id="controls" data-display-mode="manual" aria-label="演示控制">
+          <div class="field mode-field">
+            <span class="field-label">展示模式</span>
+            <div class="mode-switch" role="group" aria-label="展示模式">
+              <button class="mode-button is-active" id="mode-manual" type="button" aria-pressed="true">
+                手动逐步
+              </button>
+              <button class="mode-button" id="mode-auto" type="button" aria-pressed="false">
+                自动演示
+              </button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="disk-count">圆盘数 n</label>
+            <div class="stepper">
+              <button class="icon-button" id="btn-minus" type="button" aria-label="减少圆盘数">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+              </button>
+              <input id="disk-count" type="number" value="4" min="1" max="64" step="1" inputmode="numeric">
+              <button class="icon-button" id="btn-plus" type="button" aria-label="增加圆盘数">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="field speed-field">
+            <label for="speed">自动速度</label>
+            <input id="speed" type="range" min="1" max="6" value="4" step="1">
+            <span class="speed-scale"><i>慢</i><i id="speed-value">4</i><i>快</i></span>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-run" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true" id="run-icon-play">
+                <path d="M7 4.8v14.4a1 1 0 0 0 1.53.85l11-7.2a1 1 0 0 0 0-1.7l-11-7.2A1 1 0 0 0 7 4.8Z"/>
+              </svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true" id="run-icon-pause" hidden>
+                <path d="M9 5v14M15 5v14"/>
+              </svg>
+              <span id="run-label">开始演示</span>
+            </button>
+            <button class="btn btn-primary" id="btn-step" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l10 7-10 7V5Zm11-2h3v18h-3V3Z"/></svg>
+              下一步
+            </button>
+            <button class="btn" id="btn-reset" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11A8 8 0 1 0 18.34 16M20 5v6h-6"/></svg>
+              重置
+            </button>
+          </div>
+        </section>
+
+        <div class="status-line" aria-live="polite">
+          <span class="status-dot" id="status-dot"></span>
+          <strong id="status-text">准备就绪</strong>
+          <span id="status-rule">点击“下一步”移动一个圆盘</span>
+        </div>
+
+        <section class="layout" id="layout">
+          <div class="board-panel">
+            <div class="board-head">
+              <div class="peg-legend">
+                <span class="legend-a">A · 起点</span>
+                <span class="legend-b">B · 辅助</span>
+                <span class="legend-c">C · 目标</span>
+              </div>
+              <span class="board-caption" id="board-caption">尚未开始</span>
+            </div>
+            <div class="board-frame">
+              <svg id="board" viewBox="0 0 1000 540" preserveAspectRatio="xMidYMid meet" role="img" aria-label="汉诺塔三柱动画">
+                <title>汉诺塔盘面</title>
+                <rect class="stage-bg" x="6" y="6" width="988" height="528" rx="8"/>
+                <rect class="stage-bg-inner" x="30" y="120" width="940" height="360" rx="6"/>
+                <rect class="platform" x="88" y="448" width="824" height="14" rx="7"/>
+                <g class="pegs">
+                  <rect x="196" y="176" width="8" height="274" rx="4"/>
+                  <rect x="496" y="176" width="8" height="274" rx="4"/>
+                  <rect x="796" y="176" width="8" height="274" rx="4"/>
+                </g>
+                <g class="peg-labels">
+                  <text x="200" y="494">A</text>
+                  <text x="200" y="515">起点</text>
+                  <text x="500" y="494">B</text>
+                  <text x="500" y="515">辅助</text>
+                  <text x="800" y="494">C</text>
+                  <text x="800" y="515">目标</text>
+                </g>
+                <g id="disk-layer"></g>
+                <g id="flight-layer"></g>
+              </svg>
+            </div>
+            <div
+              class="resize-handle board-resizer"
+              id="board-resizer"
+              role="separator"
+              tabindex="0"
+              aria-orientation="horizontal"
+              aria-label="调整动画展示高度"
+              title="拖动调整动画展示高度"
+            ><span></span></div>
+          </div>
+
+          <div
+            class="resize-handle sidebar-resizer"
+            id="sidebar-resizer"
+            role="separator"
+            tabindex="0"
+            aria-orientation="vertical"
+            aria-label="调整动画区与右侧栏宽度"
+            title="拖动调整右侧栏宽度"
+          ><span></span></div>
+
+          <aside class="insight">
+            <section class="panel" aria-label="递归调用栈">
+              <div class="panel-head">
+                <h2>递归调用栈</h2>
+                <span id="stack-note">当前活动帧</span>
+              </div>
+              <div class="stack-view" id="stack-view"></div>
+            </section>
+
+            <section class="panel" aria-label="递归函数结构">
+              <div class="panel-head">
+                <h2>move_tower 递归展开</h2>
+                <span id="path-note">展开规则</span>
+              </div>
+              <div class="path-view" id="path-view"></div>
+              <pre class="code" id="code-view"><code><span class="code-line c-keyword">void</span> <span class="code-line c-fn">move_tower</span><span class="code-line">(<span class="c-type">int</span> n, <span class="c-type">char</span> start, <span class="c-type">char</span> dest, <span class="c-type">char</span> aux)</span>
 <span class="code-line">{</span>
   <span class="code-line"><span class="c-keyword">if</span> (n == <span class="c-num">1</span>)</span>
   <span class="code-line">{</span>
@@ -164,26 +386,32 @@
     <span class="code-line c-right" id="code-right">move_tower(n - <span class="c-num">1</span>, aux, dest, start); <span class="c-comment">// 右递归</span></span>
   <span class="code-line">}</span>
 <span class="code-line">}</span></code></pre>
-            <div
-              class="resize-handle code-resizer"
-              id="code-resizer"
-              role="separator"
-              tabindex="0"
-              aria-orientation="horizontal"
-              aria-label="调整代码展示高度"
-              title="拖动调整代码展示高度"
-            ><span></span></div>
-          </section>
+              <div
+                class="resize-handle code-resizer"
+                id="code-resizer"
+                role="separator"
+                tabindex="0"
+                aria-orientation="horizontal"
+                aria-label="调整代码展示高度"
+                title="拖动调整代码展示高度"
+              ><span></span></div>
+            </section>
 
-          <section class="panel" aria-label="移动记录">
-            <h2>移动记录</h2>
-            <ol class="move-log" id="move-log">
-              <li class="log-empty">尚无移动</li>
-            </ol>
-          </section>
-        </aside>
+            <section class="panel" aria-label="移动记录">
+              <h2>移动记录</h2>
+              <ol class="move-log" id="move-log">
+                <li class="log-empty">尚无移动</li>
+              </ol>
+            </section>
+          </aside>
+        </section>
       </section>
     </main>
+
+    <footer class="page-footer">
+      <span>汉诺塔递归可视化</span>
+      <a href="#intro">回到顶部</a>
+    </footer>
   </div>
   <script src="script.js"></script>
 </body>

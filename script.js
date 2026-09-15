@@ -14,6 +14,9 @@
     board: document.getElementById("board"),
     diskLayer: document.getElementById("disk-layer"),
     flightLayer: document.getElementById("flight-layer"),
+    controls: document.getElementById("controls"),
+    modeManual: document.getElementById("mode-manual"),
+    modeAuto: document.getElementById("mode-auto"),
     diskCount: document.getElementById("disk-count"),
     btnMinus: document.getElementById("btn-minus"),
     btnPlus: document.getElementById("btn-plus"),
@@ -47,6 +50,10 @@
     codeLeft: document.getElementById("code-left"),
     codeMove: document.getElementById("code-move"),
     codeRight: document.getElementById("code-right"),
+    recursionStage: document.getElementById("recursion-stage"),
+    recursionCaption: document.getElementById("recursion-caption"),
+    btnRecursionReplay: document.getElementById("btn-recursion-replay"),
+    sectionNav: document.getElementById("section-nav"),
   };
 
   let currentN = 4;
@@ -56,6 +63,9 @@
   let renderedLogCount = -1;
   let rods = [];
   let sim = null;
+  let displayMode = "manual";
+  let principleTimer = 0;
+  let principlePlayed = false;
   const layoutPref = loadLayoutPrefs();
 
   function makeSvg(name, attrs) {
@@ -307,6 +317,7 @@
       paused: false,
       done: false,
       singleStep: false,
+      pauseAfterMove: false,
       rootEntered: false,
       frames: [],
       pendingMove: null,
@@ -478,7 +489,10 @@
       height,
       elapsed: 0,
     };
-    sim.duration = 720 / Number(el.speed.value);
+    sim.duration =
+      displayMode === "manual"
+        ? 520
+        : 1500 - (Number(el.speed.value) - 1) * 220;
     sim.lastTs = null;
 
     renderBoard();
@@ -560,10 +574,27 @@
   }
 
   function advanceAfterMove() {
-    if (sim.singleStep) {
+    if (sim.pauseAfterMove) {
+      sim.pauseAfterMove = false;
       sim.singleStep = false;
       sim.paused = true;
       sim.auto = false;
+      renderStackAndCode();
+      updateStatus();
+      updateStats();
+      updateControls();
+      return;
+    }
+
+    if (sim.singleStep) {
+      sim.singleStep = false;
+      sim.auto = false;
+      if (BigInt(moveNumber) === totalMoves) {
+        sim.done = true;
+        sim.paused = false;
+      } else {
+        sim.paused = true;
+      }
       renderStackAndCode();
       updateStatus();
       updateStats();
@@ -639,6 +670,35 @@
     updateControls();
   }
 
+  function setDisplayMode(mode) {
+    if (mode !== "manual" && mode !== "auto") return;
+    if (displayMode === mode) return;
+    displayMode = mode;
+    el.controls.dataset.displayMode = mode;
+    el.modeManual.classList.toggle("is-active", mode === "manual");
+    el.modeAuto.classList.toggle("is-active", mode === "auto");
+    el.modeManual.setAttribute(
+      "aria-pressed",
+      String(mode === "manual")
+    );
+    el.modeAuto.setAttribute("aria-pressed", String(mode === "auto"));
+
+    if (sim && !sim.done) {
+      sim.auto = false;
+      sim.singleStep = false;
+      if (sim.currentMove) {
+        sim.pauseAfterMove = true;
+      } else {
+        sim.paused = true;
+        cancelAnimationFrame(sim.rafId);
+        renderStackAndCode();
+      }
+    }
+
+    updateStatus();
+    updateControls();
+  }
+
   function seekToStep(step) {
     if (!sim || !(sim.paused || sim.done)) return;
     if (step < 1 || step > moveLog.length || step === moveNumber) return;
@@ -687,11 +747,14 @@
     updateControls();
   }
 
-  function runSingleStep() {
-    if (!sim || sim.done || !sim.paused) return;
+  function runManualStep() {
+    if (displayMode !== "manual") return;
+    if (!sim) createSim(false);
+    if (sim.done || sim.currentMove) return;
     sim.singleStep = true;
     sim.auto = false;
     sim.paused = false;
+    sim.pauseAfterMove = false;
     sim.lastTs = null;
     if (!sim.currentMove) {
       const action = takeNextAction();
@@ -726,6 +789,7 @@
   }
 
   function runAction() {
+    if (displayMode !== "auto") return;
     if (!sim || sim.done) {
       beginAutoRun();
       return;
@@ -782,8 +846,11 @@
   }
 
   function updateStatus() {
-    let text = "准备就绪";
-    let rule = `移动 ${currentN} 层塔：起点 A → 目标 C，借助 B`;
+    let text = displayMode === "manual" ? "手动模式" : "准备就绪";
+    let rule =
+      displayMode === "manual"
+        ? "点击“下一步”移动一个圆盘"
+        : `移动 ${currentN} 层塔：起点 A → 目标 C，借助 B`;
     let state = "idle";
 
     if (sim && sim.done) {
@@ -792,10 +859,13 @@
       state = "done";
     } else if (sim) {
       if (sim.paused) {
-        text = "已暂停";
+        text = displayMode === "manual" ? "等待下一步" : "已暂停";
         state = "paused";
       } else if (sim.singleStep) {
-        text = "单步执行";
+        text = "正在执行一步";
+        state = "running";
+      } else if (displayMode === "manual") {
+        text = "正在执行一步";
         state = "running";
       } else {
         text = "自动演示";
@@ -806,7 +876,10 @@
         const move = sim.currentMove;
         rule = `${move.rank} 号盘：${PEG_LABEL[move.from]} → ${PEG_LABEL[move.to]}`;
       } else if (sim.paused) {
-        rule = "等待下一步移动";
+        rule =
+          displayMode === "manual"
+            ? "点击“下一步”继续移动"
+            : "等待继续播放";
       }
     }
 
@@ -825,17 +898,34 @@
     } else if (sim && sim.done) {
       el.boardCaption.textContent = `完成 ${formatBigInt(totalMoves)} 步`;
     } else if (sim && sim.paused) {
-      el.boardCaption.textContent = `已暂停 · ${moveNumber} / ${formatBigInt(totalMoves)}`;
+      el.boardCaption.textContent =
+        `${displayMode === "manual" ? "等待下一步" : "已暂停"} · ` +
+        `${moveNumber} / ${formatBigInt(totalMoves)}`;
     } else if (!sim) {
-      el.boardCaption.textContent = `总步数 ${formatBigInt(totalMoves)}`;
+      el.boardCaption.textContent =
+        `${displayMode === "manual" ? "手动模式" : "自动模式"} · ` +
+        `总步数 ${formatBigInt(totalMoves)}`;
     }
   }
 
   function updateControls() {
     const done = Boolean(sim && sim.done);
     const running = Boolean(sim && !sim.done && !sim.paused);
+    const isManual = displayMode === "manual";
 
-    if (!sim) {
+    el.controls.dataset.displayMode = displayMode;
+    el.modeManual.classList.toggle("is-active", isManual);
+    el.modeAuto.classList.toggle("is-active", !isManual);
+    el.modeManual.setAttribute("aria-pressed", String(isManual));
+    el.modeAuto.setAttribute("aria-pressed", String(!isManual));
+    el.btnRun.hidden = isManual;
+    el.btnStep.hidden = !isManual;
+
+    if (!sim && isManual) {
+      el.runLabel.textContent = "开始演示";
+      el.runIconPlay.hidden = false;
+      el.runIconPause.hidden = true;
+    } else if (!sim) {
       el.runLabel.textContent = "开始演示";
       el.runIconPlay.hidden = false;
       el.runIconPause.hidden = true;
@@ -853,13 +943,15 @@
       el.runIconPause.hidden = false;
     }
 
-    el.btnStep.disabled = !Boolean(sim && !sim.done && sim.paused);
+    el.btnStep.disabled = isManual
+      ? Boolean(sim && (sim.done || sim.currentMove))
+      : true;
     el.btnRun.disabled = false;
     el.btnReset.disabled = false;
 
     const speed = Number(el.speed.value);
     el.speedValue.textContent = String(speed);
-    if (running) el.btnStep.disabled = true;
+    if (running && isManual) el.btnStep.disabled = true;
 
     for (const row of el.moveLog.querySelectorAll(".log-btn")) {
       row.disabled = running;
@@ -1225,6 +1317,111 @@
     if (running) container.scrollTop = container.scrollHeight;
   }
 
+  function setRecursionStep(step) {
+    const nextStep = Math.max(0, Math.min(5, step));
+    const captions = [
+      "从最大的问题开始：把 3 个盘从 A 移到 C。",
+      "第一步：先解决左递归，把上面 2 个盘从 A 移到 B。",
+      "左递归继续拆分：先移动 1 号盘，再移动 2 号盘，最后移回 1 号盘。",
+      "左递归完成后，当前这一层只需要直接移动最大的 3 号盘。",
+      "最后解决右递归：把 B 上的 2 个盘移动到目标柱 C。",
+      "所有最小问题都直接移动 1 号盘，整棵递归树依次完成。",
+    ];
+    el.recursionStage.dataset.step = String(nextStep);
+    el.recursionCaption.textContent = captions[nextStep];
+  }
+
+  function stopPrincipleAnimation() {
+    if (principleTimer) {
+      clearTimeout(principleTimer);
+      principleTimer = 0;
+    }
+  }
+
+  function startPrincipleAnimation() {
+    stopPrincipleAnimation();
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (reduceMotion) {
+      setRecursionStep(5);
+      return;
+    }
+
+    setRecursionStep(0);
+    let step = 0;
+    const advance = () => {
+      step += 1;
+      setRecursionStep(step);
+      if (step < 5) {
+        principleTimer = setTimeout(advance, 900);
+      } else {
+        principleTimer = 0;
+      }
+    };
+    principleTimer = setTimeout(advance, 650);
+  }
+
+  function initScrollEffects() {
+    document.documentElement.classList.add("js");
+    const reveals = [...document.querySelectorAll(".reveal")];
+    const sections = [...document.querySelectorAll("main .page-section[id]")];
+    const navLinks = [...el.sectionNav.querySelectorAll("a")];
+
+    if (!("IntersectionObserver" in window)) {
+      reveals.forEach((item) => item.classList.add("is-visible"));
+      return;
+    }
+
+    const revealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12 }
+    );
+    reveals.forEach((item) => revealObserver.observe(item));
+
+    const navObserver = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        navLinks.forEach((link) => {
+          link.classList.toggle(
+            "active",
+            link.getAttribute("href") === `#${visible.target.id}`
+          );
+        });
+      },
+      { rootMargin: "-25% 0px -60% 0px", threshold: [0, 0.2, 0.5] }
+    );
+    sections.forEach((section) => navObserver.observe(section));
+
+    const principleSection = document.getElementById("principle");
+    const principleObserver = new IntersectionObserver(
+      (entries) => {
+        if (
+          !principlePlayed &&
+          entries.some(
+            (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.45
+          )
+        ) {
+          principlePlayed = true;
+          startPrincipleAnimation();
+          principleObserver.disconnect();
+        }
+      },
+      { threshold: [0.45] }
+    );
+    principleObserver.observe(principleSection);
+  }
+
   function bindEvents() {
     attachPointerResize(el.sidebarResizer, {
       axis: "x",
@@ -1274,8 +1471,14 @@
     });
 
     el.btnRun.addEventListener("click", runAction);
-    el.btnStep.addEventListener("click", runSingleStep);
+    el.btnStep.addEventListener("click", runManualStep);
     el.btnReset.addEventListener("click", stopAndReset);
+    el.modeManual.addEventListener("click", () => setDisplayMode("manual"));
+    el.modeAuto.addEventListener("click", () => setDisplayMode("auto"));
+    el.btnRecursionReplay.addEventListener("click", () => {
+      principlePlayed = true;
+      startPrincipleAnimation();
+    });
 
     el.speed.addEventListener("input", () => {
       el.speedValue.textContent = el.speed.value;
@@ -1285,7 +1488,14 @@
   function init() {
     totalMoves = (1n << BigInt(currentN)) - 1n;
     rods = makeInitialRods();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      principlePlayed = true;
+      setRecursionStep(5);
+    } else {
+      setRecursionStep(0);
+    }
     bindEvents();
+    initScrollEffects();
     applyLayoutPrefs();
     renderBoard();
     renderLog();
