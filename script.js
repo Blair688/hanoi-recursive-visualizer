@@ -17,8 +17,6 @@
     heroSection: document.getElementById("intro"),
     heroVisual: document.querySelector("[data-parallax]"),
     controls: document.getElementById("controls"),
-    modeManual: document.getElementById("mode-manual"),
-    modeAuto: document.getElementById("mode-auto"),
     btnPrev: document.getElementById("btn-prev"),
     diskCount: document.getElementById("disk-count"),
     btnMinus: document.getElementById("btn-minus"),
@@ -74,7 +72,7 @@
   let renderedLogCount = -1;
   let rods = [];
   let sim = null;
-  let displayMode = "manual";
+  let queuedStepAction = null;
   let principleTimer = 0;
   let principlePlayed = false;
   let principleManual = false;
@@ -511,10 +509,9 @@
       height,
       elapsed: 0,
     };
-    sim.duration =
-      displayMode === "manual"
-        ? 520
-        : 1500 - (Number(el.speed.value) - 1) * 220;
+    sim.duration = sim.singleStep
+      ? 520
+      : 1500 - (Number(el.speed.value) - 1) * 220;
     sim.lastTs = null;
 
     renderBoard();
@@ -575,7 +572,6 @@
 
   function runPreviousStep() {
     if (
-      displayMode !== "manual" ||
       !sim ||
       sim.currentMove ||
       reverseAnimation ||
@@ -637,6 +633,19 @@
     reverseRaf = requestAnimationFrame(reverseFrame);
   }
 
+  function requestPreviousStep() {
+    if (!sim || reverseAnimation || moveNumber < 1) return;
+    if (!sim.paused && sim.currentMove) {
+      queuedStepAction = "prev";
+      sim.pauseAfterMove = true;
+      updateStatus();
+      updateControls();
+      return;
+    }
+    if (!sim.paused) pauseAuto();
+    runPreviousStep();
+  }
+
   function finishCurrentMove() {
     if (!sim.currentMove) return;
     const move = sim.currentMove;
@@ -690,6 +699,8 @@
 
   function advanceAfterMove() {
     if (sim.pauseAfterMove) {
+      const queuedAction = queuedStepAction;
+      queuedStepAction = null;
       sim.pauseAfterMove = false;
       sim.singleStep = false;
       sim.paused = true;
@@ -698,6 +709,12 @@
       updateStatus();
       updateStats();
       updateControls();
+      if (queuedAction) {
+        setTimeout(() => {
+          if (queuedAction === "next") runManualStep();
+          if (queuedAction === "prev") runPreviousStep();
+        }, 0);
+      }
       return;
     }
 
@@ -778,39 +795,11 @@
 
   function pauseAuto() {
     if (!sim || sim.done) return;
+    queuedStepAction = null;
+    sim.pauseAfterMove = false;
     sim.paused = true;
     cancelAnimationFrame(sim.rafId);
     renderStackAndCode();
-    updateStatus();
-    updateControls();
-  }
-
-  function setDisplayMode(mode) {
-    if (mode !== "manual" && mode !== "auto") return;
-    if (reverseAnimation) return;
-    if (displayMode === mode) return;
-    displayMode = mode;
-    el.controls.dataset.displayMode = mode;
-    el.modeManual.classList.toggle("is-active", mode === "manual");
-    el.modeAuto.classList.toggle("is-active", mode === "auto");
-    el.modeManual.setAttribute(
-      "aria-pressed",
-      String(mode === "manual")
-    );
-    el.modeAuto.setAttribute("aria-pressed", String(mode === "auto"));
-
-    if (sim && !sim.done) {
-      sim.auto = false;
-      sim.singleStep = false;
-      if (sim.currentMove) {
-        sim.pauseAfterMove = true;
-      } else {
-        sim.paused = true;
-        cancelAnimationFrame(sim.rafId);
-        renderStackAndCode();
-      }
-    }
-
     updateStatus();
     updateControls();
   }
@@ -819,6 +808,7 @@
     if (!sim || !(sim.paused || sim.done)) return;
     if (step < 0 || step > moveLog.length || step === moveNumber) return;
 
+    queuedStepAction = null;
     cancelReverseAnimation();
     cancelAnimationFrame(sim.rafId);
     sim.currentMove = null;
@@ -865,7 +855,7 @@
   }
 
   function runManualStep() {
-    if (displayMode !== "manual" || reverseAnimation) return;
+    if (reverseAnimation) return;
     if (!sim) createSim(false);
     if (sim.done || sim.currentMove) return;
     sim.singleStep = true;
@@ -890,7 +880,22 @@
     updateControls();
   }
 
+  function requestStepForward() {
+    if (reverseAnimation) return;
+    if (sim && sim.done) return;
+    if (sim && !sim.paused && sim.currentMove) {
+      queuedStepAction = "next";
+      sim.pauseAfterMove = true;
+      updateStatus();
+      updateControls();
+      return;
+    }
+    if (sim && !sim.paused) pauseAuto();
+    runManualStep();
+  }
+
   function stopAndReset() {
+    queuedStepAction = null;
     cancelReverseAnimation();
     closeDiskPopover();
     if (sim) cancelAnimationFrame(sim.rafId);
@@ -908,7 +913,9 @@
   }
 
   function runAction() {
-    if (displayMode !== "auto") return;
+    if (reverseAnimation) return;
+    if (sim) sim.pauseAfterMove = false;
+    queuedStepAction = null;
     if (!sim || sim.done) {
       beginAutoRun();
       return;
@@ -965,11 +972,8 @@
   }
 
   function updateStatus() {
-    let text = displayMode === "manual" ? "手动模式" : "准备就绪";
-    let rule =
-      displayMode === "manual"
-        ? "点击“下一步”移动一个圆盘"
-        : `移动 ${currentN} 层塔：起点 A → 目标 C，借助 B`;
+    let text = "准备就绪";
+    let rule = "点击“开始演示”，或使用“下一步”单步移动";
     let state = "idle";
 
     if (reverseAnimation) {
@@ -981,28 +985,28 @@
       rule = `共 ${formatBigInt(totalMoves)} 步，所有圆盘已移动到目标柱 C`;
       state = "done";
     } else if (sim) {
-      if (sim.paused) {
-        text = displayMode === "manual" ? "等待下一步" : "已暂停";
+      if (queuedStepAction) {
+        text = "准备暂停";
+        rule =
+          queuedStepAction === "prev"
+            ? "当前圆盘落地后返回上一步"
+            : "当前圆盘落地后继续下一步";
+        state = "running";
+      } else if (sim.paused) {
+        text = "已暂停";
+        rule = "点击“继续”，或使用上一步 / 下一步";
         state = "paused";
       } else if (sim.singleStep) {
         text = "正在执行一步";
         state = "running";
-      } else if (displayMode === "manual") {
-        text = "正在执行一步";
-        state = "running";
       } else {
-        text = "自动演示";
+        text = "自动播放";
         state = "running";
       }
 
-      if (sim.currentMove) {
+      if (sim.currentMove && !queuedStepAction) {
         const move = sim.currentMove;
         rule = `${move.rank} 号盘：${PEG_LABEL[move.from]} → ${PEG_LABEL[move.to]}`;
-      } else if (sim.paused) {
-        rule =
-          displayMode === "manual"
-            ? "点击“下一步”继续移动"
-            : "等待继续播放";
       }
     }
 
@@ -1027,11 +1031,9 @@
       el.boardCaption.textContent = `完成 ${formatBigInt(totalMoves)} 步`;
     } else if (sim && sim.paused) {
       el.boardCaption.textContent =
-        `${displayMode === "manual" ? "等待下一步" : "已暂停"} · ` +
-        `${moveNumber} / ${formatBigInt(totalMoves)}`;
+        `已暂停 · ${moveNumber} / ${formatBigInt(totalMoves)}`;
     } else if (!sim) {
       el.boardCaption.textContent =
-        `${displayMode === "manual" ? "手动模式" : "自动模式"} · ` +
         `总步数 ${formatBigInt(totalMoves)}`;
     }
   }
@@ -1039,25 +1041,10 @@
   function updateControls() {
     const done = Boolean(sim && sim.done);
     const running = Boolean(sim && !sim.done && !sim.paused);
-    const isManual = displayMode === "manual";
+    const stepping = Boolean(sim && !sim.auto && sim.currentMove);
     const reversing = Boolean(reverseAnimation);
 
-    el.controls.dataset.displayMode = displayMode;
-    el.modeManual.classList.toggle("is-active", isManual);
-    el.modeAuto.classList.toggle("is-active", !isManual);
-    el.modeManual.setAttribute("aria-pressed", String(isManual));
-    el.modeAuto.setAttribute("aria-pressed", String(!isManual));
-    el.modeManual.disabled = reversing;
-    el.modeAuto.disabled = reversing;
-    el.btnRun.hidden = isManual;
-    el.btnStep.hidden = !isManual;
-    el.btnPrev.hidden = !isManual;
-
-    if (!sim && isManual) {
-      el.runLabel.textContent = "开始演示";
-      el.runIconPlay.hidden = false;
-      el.runIconPause.hidden = true;
-    } else if (!sim) {
+    if (!sim) {
       el.runLabel.textContent = "开始演示";
       el.runIconPlay.hidden = false;
       el.runIconPause.hidden = true;
@@ -1069,28 +1056,30 @@
       el.runLabel.textContent = "继续";
       el.runIconPlay.hidden = false;
       el.runIconPause.hidden = true;
-    } else {
+    } else if (sim.auto) {
       el.runLabel.textContent = "暂停";
       el.runIconPlay.hidden = true;
       el.runIconPause.hidden = false;
+    } else {
+      el.runLabel.textContent = "继续";
+      el.runIconPlay.hidden = false;
+      el.runIconPause.hidden = true;
     }
 
-    el.btnStep.disabled = isManual
-      ? Boolean(reversing || (sim && (sim.done || sim.currentMove)))
-      : true;
+    el.btnStep.disabled = Boolean(
+      reversing || (sim && sim.done) || stepping
+    );
     el.btnPrev.disabled = Boolean(
-      !isManual ||
-        reversing ||
+      reversing ||
         !sim ||
         moveNumber < 1 ||
-        sim.currentMove
+        stepping
     );
-    el.btnRun.disabled = false;
+    el.btnRun.disabled = Boolean(reversing || stepping);
     el.btnReset.disabled = false;
 
     const speed = Number(el.speed.value);
     el.speedValue.textContent = String(speed);
-    if (running && isManual) el.btnStep.disabled = true;
 
     for (const row of el.moveLog.querySelectorAll(".log-btn")) {
       row.disabled = running || reversing;
@@ -1547,6 +1536,7 @@
 
   function jumpToDiskStep(step) {
     if (!sim) return;
+    queuedStepAction = null;
     cancelReverseAnimation();
     sim.auto = false;
     sim.singleStep = false;
@@ -1859,11 +1849,9 @@
     });
 
     el.btnRun.addEventListener("click", runAction);
-    el.btnPrev.addEventListener("click", runPreviousStep);
-    el.btnStep.addEventListener("click", runManualStep);
+    el.btnPrev.addEventListener("click", requestPreviousStep);
+    el.btnStep.addEventListener("click", requestStepForward);
     el.btnReset.addEventListener("click", stopAndReset);
-    el.modeManual.addEventListener("click", () => setDisplayMode("manual"));
-    el.modeAuto.addEventListener("click", () => setDisplayMode("auto"));
     el.btnRecursionReplay.addEventListener("click", () => {
       principlePlayed = true;
       startPrincipleAnimation();

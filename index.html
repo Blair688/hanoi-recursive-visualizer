@@ -234,7 +234,7 @@
             <p class="section-kicker">第三部分 · 交互实验室</p>
             <h2>亲手推动每一步，同时观察递归</h2>
             <p>
-              选择手动逐步或自动演示。盘面、调用栈、代码高亮和移动记录会始终同步。
+              可以自动播放，也可以单步前进或回退。盘面、调用栈、代码高亮和移动记录会始终同步。
             </p>
           </div>
           <div class="stat-strip" aria-label="运行统计">
@@ -253,19 +253,7 @@
           </div>
         </div>
 
-        <section class="controls" id="controls" data-display-mode="manual" aria-label="演示控制">
-          <div class="field mode-field">
-            <span class="field-label">展示模式</span>
-            <div class="mode-switch" role="group" aria-label="展示模式">
-              <button class="mode-button is-active" id="mode-manual" type="button" aria-pressed="true">
-                手动逐步
-              </button>
-              <button class="mode-button" id="mode-auto" type="button" aria-pressed="false">
-                自动演示
-              </button>
-            </div>
-          </div>
-
+        <section class="controls" id="controls" aria-label="演示控制">
           <div class="field">
             <label for="disk-count">圆盘数 n</label>
             <div class="stepper">
@@ -280,12 +268,16 @@
           </div>
 
           <div class="field speed-field">
-            <label for="speed">自动速度</label>
+            <label for="speed">播放速度</label>
             <input id="speed" type="range" min="1" max="6" value="4" step="1">
             <span class="speed-scale"><i>慢</i><i id="speed-value">4</i><i>快</i></span>
           </div>
 
           <div class="actions">
+            <button class="btn" id="btn-prev" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
+              上一步
+            </button>
             <button class="btn btn-primary" id="btn-run" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true" id="run-icon-play">
                 <path d="M7 4.8v14.4a1 1 0 0 0 1.53.85l11-7.2a1 1 0 0 0 0-1.7l-11-7.2A1 1 0 0 0 7 4.8Z"/>
@@ -295,11 +287,7 @@
               </svg>
               <span id="run-label">开始演示</span>
             </button>
-            <button class="btn" id="btn-prev" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg>
-              上一步
-            </button>
-            <button class="btn btn-primary" id="btn-step" type="button">
+            <button class="btn" id="btn-step" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l10 7-10 7V5Zm11-2h3v18h-3V3Z"/></svg>
               下一步
             </button>
