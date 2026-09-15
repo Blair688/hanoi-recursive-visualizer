@@ -14,9 +14,12 @@
     board: document.getElementById("board"),
     diskLayer: document.getElementById("disk-layer"),
     flightLayer: document.getElementById("flight-layer"),
+    heroSection: document.getElementById("intro"),
+    heroVisual: document.querySelector("[data-parallax]"),
     controls: document.getElementById("controls"),
     modeManual: document.getElementById("mode-manual"),
     modeAuto: document.getElementById("mode-auto"),
+    btnPrev: document.getElementById("btn-prev"),
     diskCount: document.getElementById("disk-count"),
     btnMinus: document.getElementById("btn-minus"),
     btnPlus: document.getElementById("btn-plus"),
@@ -54,6 +57,11 @@
     recursionCaption: document.getElementById("recursion-caption"),
     btnRecursionReplay: document.getElementById("btn-recursion-replay"),
     sectionNav: document.getElementById("section-nav"),
+    scrollProgressBar: document.getElementById("scroll-progress-bar"),
+    diskPopover: document.getElementById("disk-step-popover"),
+    diskPopoverTitle: document.getElementById("disk-popover-title"),
+    diskPopoverList: document.getElementById("disk-popover-list"),
+    diskPopoverClose: document.getElementById("disk-popover-close"),
   };
 
   let currentN = 4;
@@ -66,6 +74,9 @@
   let displayMode = "manual";
   let principleTimer = 0;
   let principlePlayed = false;
+  let reverseAnimation = null;
+  let reverseRaf = 0;
+  let pinnedDiskRank = null;
   const layoutPref = loadLayoutPrefs();
 
   function makeSvg(name, attrs) {
@@ -417,6 +428,10 @@
         const color = diskColor(rank);
         const rect = makeSvg("rect", {
           class: "disk",
+          "data-disk-rank": String(rank),
+          tabindex: "0",
+          role: "button",
+          "aria-label": `${rank} 号圆盘，查看相关移动步骤`,
           x: x.toFixed(2),
           y: y.toFixed(2),
           width: width.toFixed(2),
@@ -451,6 +466,7 @@
       console.error("Invalid move source", move, source);
       return;
     }
+    closeDiskPopover();
     if (move.frame) move.frame.directStep = moveNumber + 1;
 
     const height = diskGeometry();
@@ -470,6 +486,7 @@
     const width = diskWidth(rank);
     const rect = makeSvg("rect", {
       class: "flight-disk",
+      "data-disk-rank": String(rank),
       x: (startCenter.x - width / 2).toFixed(2),
       y: (startCenter.y - height / 2).toFixed(2),
       width: width.toFixed(2),
@@ -502,9 +519,7 @@
     updateControls();
   }
 
-  function renderFlight(progress) {
-    if (!sim.currentMove) return;
-    const move = sim.currentMove;
+  function renderFlightFor(move, progress) {
     const rect = el.flightLayer.firstElementChild;
     if (!rect) return;
 
@@ -520,6 +535,101 @@
 
     rect.setAttribute("x", (x - move.width / 2).toFixed(2));
     rect.setAttribute("y", (y - move.height / 2).toFixed(2));
+  }
+
+  function renderFlight(progress) {
+    if (!sim || !sim.currentMove) return;
+    renderFlightFor(sim.currentMove, progress);
+  }
+
+  function cancelReverseAnimation() {
+    if (reverseRaf) cancelAnimationFrame(reverseRaf);
+    reverseRaf = 0;
+    reverseAnimation = null;
+    el.flightLayer.replaceChildren();
+  }
+
+  function reverseFrame(ts) {
+    if (!reverseAnimation) return;
+    if (reverseAnimation.lastTs === null) reverseAnimation.lastTs = ts;
+    const delta = Math.min(64, ts - reverseAnimation.lastTs);
+    reverseAnimation.lastTs = ts;
+    reverseAnimation.elapsed += delta;
+    const progress = Math.min(1, reverseAnimation.elapsed / reverseAnimation.duration);
+
+    if (progress >= 1) {
+      const targetStep = reverseAnimation.targetStep;
+      cancelReverseAnimation();
+      seekToStep(targetStep);
+      return;
+    }
+
+    renderFlightFor(reverseAnimation, progress);
+    reverseRaf = requestAnimationFrame(reverseFrame);
+  }
+
+  function runPreviousStep() {
+    if (
+      displayMode !== "manual" ||
+      !sim ||
+      sim.currentMove ||
+      reverseAnimation ||
+      moveNumber < 1
+    ) {
+      return;
+    }
+
+    const targetStep = moveNumber - 1;
+    const entry = moveLog[targetStep];
+    if (!entry) return;
+    const source = rods[entry.toIndex];
+    if (source[source.length - 1] !== entry.disk) return;
+
+    cancelAnimationFrame(sim.rafId);
+    closeDiskPopover();
+    const height = diskGeometry();
+    const sourceTopY = FLOOR_Y - height * source.length;
+    const startCenter = {
+      x: PEG_X[entry.toIndex],
+      y: sourceTopY + height / 2,
+    };
+    source.pop();
+    const targetTopY = FLOOR_Y - height * (rods[entry.fromIndex].length + 1);
+    const endCenter = {
+      x: PEG_X[entry.fromIndex],
+      y: targetTopY + height / 2,
+    };
+    const width = diskWidth(entry.disk);
+    const rect = makeSvg("rect", {
+      class: "flight-disk",
+      "data-disk-rank": String(entry.disk),
+      x: (startCenter.x - width / 2).toFixed(2),
+      y: (startCenter.y - height / 2).toFixed(2),
+      width: width.toFixed(2),
+      height: height.toFixed(2),
+      rx: Math.max(2, Math.min(8, height / 2)).toFixed(1),
+      fill: diskColor(entry.disk),
+    });
+    el.flightLayer.replaceChildren(rect);
+
+    reverseAnimation = {
+      rank: entry.disk,
+      from: entry.toIndex,
+      to: entry.fromIndex,
+      startCenter,
+      endCenter,
+      width,
+      height,
+      elapsed: 0,
+      duration: 420,
+      lastTs: null,
+      targetStep,
+    };
+    sim.paused = true;
+    renderBoard();
+    updateStatus();
+    updateControls();
+    reverseRaf = requestAnimationFrame(reverseFrame);
   }
 
   function finishCurrentMove() {
@@ -672,6 +782,7 @@
 
   function setDisplayMode(mode) {
     if (mode !== "manual" && mode !== "auto") return;
+    if (reverseAnimation) return;
     if (displayMode === mode) return;
     displayMode = mode;
     el.controls.dataset.displayMode = mode;
@@ -701,8 +812,9 @@
 
   function seekToStep(step) {
     if (!sim || !(sim.paused || sim.done)) return;
-    if (step < 1 || step > moveLog.length || step === moveNumber) return;
+    if (step < 0 || step > moveLog.length || step === moveNumber) return;
 
+    cancelReverseAnimation();
     cancelAnimationFrame(sim.rafId);
     sim.currentMove = null;
     el.flightLayer.replaceChildren();
@@ -748,7 +860,7 @@
   }
 
   function runManualStep() {
-    if (displayMode !== "manual") return;
+    if (displayMode !== "manual" || reverseAnimation) return;
     if (!sim) createSim(false);
     if (sim.done || sim.currentMove) return;
     sim.singleStep = true;
@@ -774,6 +886,8 @@
   }
 
   function stopAndReset() {
+    cancelReverseAnimation();
+    closeDiskPopover();
     if (sim) cancelAnimationFrame(sim.rafId);
     sim = null;
     rods = makeInitialRods();
@@ -853,7 +967,11 @@
         : `移动 ${currentN} 层塔：起点 A → 目标 C，借助 B`;
     let state = "idle";
 
-    if (sim && sim.done) {
+    if (reverseAnimation) {
+      text = "正在返回上一步";
+      rule = `${reverseAnimation.rank} 号盘：${PEG_LABEL[reverseAnimation.from]} → ${PEG_LABEL[reverseAnimation.to]}`;
+      state = "running";
+    } else if (sim && sim.done) {
       text = "演示完成";
       rule = `共 ${formatBigInt(totalMoves)} 步，所有圆盘已移动到目标柱 C`;
       state = "done";
@@ -890,7 +1008,12 @@
     if (state === "paused") el.statusDot.classList.add("is-paused");
     if (state === "done") el.statusDot.classList.add("is-done");
 
-    if (sim && sim.currentMove) {
+    if (reverseAnimation) {
+      el.boardCaption.textContent =
+        `返回第 ${moveNumber - 1} 步 · ` +
+        `${reverseAnimation.rank} 号盘 ` +
+        `${PEG_LABEL[reverseAnimation.from]} → ${PEG_LABEL[reverseAnimation.to]}`;
+    } else if (sim && sim.currentMove) {
       const move = sim.currentMove;
       el.boardCaption.textContent =
         `${moveNumber + 1} / ${formatBigInt(totalMoves)} · ` +
@@ -912,14 +1035,18 @@
     const done = Boolean(sim && sim.done);
     const running = Boolean(sim && !sim.done && !sim.paused);
     const isManual = displayMode === "manual";
+    const reversing = Boolean(reverseAnimation);
 
     el.controls.dataset.displayMode = displayMode;
     el.modeManual.classList.toggle("is-active", isManual);
     el.modeAuto.classList.toggle("is-active", !isManual);
     el.modeManual.setAttribute("aria-pressed", String(isManual));
     el.modeAuto.setAttribute("aria-pressed", String(!isManual));
+    el.modeManual.disabled = reversing;
+    el.modeAuto.disabled = reversing;
     el.btnRun.hidden = isManual;
     el.btnStep.hidden = !isManual;
+    el.btnPrev.hidden = !isManual;
 
     if (!sim && isManual) {
       el.runLabel.textContent = "开始演示";
@@ -944,8 +1071,15 @@
     }
 
     el.btnStep.disabled = isManual
-      ? Boolean(sim && (sim.done || sim.currentMove))
+      ? Boolean(reversing || (sim && (sim.done || sim.currentMove)))
       : true;
+    el.btnPrev.disabled = Boolean(
+      !isManual ||
+        reversing ||
+        !sim ||
+        moveNumber < 1 ||
+        sim.currentMove
+    );
     el.btnRun.disabled = false;
     el.btnReset.disabled = false;
 
@@ -954,7 +1088,7 @@
     if (running && isManual) el.btnStep.disabled = true;
 
     for (const row of el.moveLog.querySelectorAll(".log-btn")) {
-      row.disabled = running;
+      row.disabled = running || reversing;
     }
   }
 
@@ -1317,6 +1451,140 @@
     if (running) container.scrollTop = container.scrollHeight;
   }
 
+  function closeDiskPopover() {
+    if (!el.diskPopover || el.diskPopover.hidden) return;
+    el.diskPopover.hidden = true;
+    pinnedDiskRank = null;
+    for (const disk of document.querySelectorAll(".disk.is-disk-highlighted")) {
+      disk.classList.remove("is-disk-highlighted");
+    }
+  }
+
+  function positionDiskPopover(rank) {
+    const disk = document.querySelector(
+      `[data-disk-rank="${rank}"]`
+    );
+    if (!disk) return;
+    const frameRect = el.boardFrame.getBoundingClientRect();
+    const diskRect = disk.getBoundingClientRect();
+    const popoverRect = el.diskPopover.getBoundingClientRect();
+    const gap = 10;
+    const edge = 8;
+
+    let left = diskRect.right - frameRect.left + gap;
+    if (left + popoverRect.width > frameRect.width - edge) {
+      left = diskRect.left - frameRect.left - popoverRect.width - gap;
+    }
+    left = clampValue(left, edge, frameRect.width - popoverRect.width - edge);
+
+    let top =
+      diskRect.top -
+      frameRect.top +
+      diskRect.height / 2 -
+      popoverRect.height / 2;
+    top = clampValue(top, edge, frameRect.height - popoverRect.height - edge);
+
+    el.diskPopover.style.left = `${Math.round(left)}px`;
+    el.diskPopover.style.top = `${Math.round(top)}px`;
+  }
+
+  function openDiskPopover(rank, pinned) {
+    const entries = moveLog.filter((entry) => entry.disk === rank);
+    pinnedDiskRank = pinned ? rank : null;
+    el.diskPopover.hidden = false;
+    el.diskPopoverTitle.textContent =
+      `${rank} 号盘 · ${entries.length} 次移动`;
+    el.diskPopoverList.replaceChildren();
+
+    for (const disk of document.querySelectorAll(".disk")) {
+      disk.classList.toggle(
+        "is-disk-highlighted",
+        Number(disk.dataset.diskRank) === rank
+      );
+    }
+
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "disk-popover-empty";
+      empty.textContent = "该圆盘尚未移动";
+      el.diskPopoverList.appendChild(empty);
+    } else {
+      const fragment = document.createDocumentFragment();
+      for (const entry of entries) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "disk-step-button";
+        if (entry.step === moveNumber) button.classList.add("is-current");
+        button.setAttribute(
+          "aria-label",
+          `跳到第 ${entry.step} 步，${entry.disk} 号盘从 ` +
+            `${PEG_LABEL[entry.fromIndex]} 到 ${PEG_LABEL[entry.toIndex]}`
+        );
+        const step = document.createElement("span");
+        step.textContent = `第 ${entry.step} 步`;
+        const route = document.createElement("span");
+        route.textContent =
+          `${PEG_LABEL[entry.fromIndex]} → ${PEG_LABEL[entry.toIndex]}`;
+        button.appendChild(step);
+        button.appendChild(route);
+        button.addEventListener("click", () => jumpToDiskStep(entry.step));
+        fragment.appendChild(button);
+      }
+      el.diskPopoverList.appendChild(fragment);
+    }
+
+    requestAnimationFrame(() => {
+      positionDiskPopover(rank);
+      const current = el.diskPopoverList.querySelector(".is-current");
+      if (current) current.scrollIntoView({ block: "center" });
+    });
+  }
+
+  function jumpToDiskStep(step) {
+    if (!sim) return;
+    cancelReverseAnimation();
+    sim.auto = false;
+    sim.singleStep = false;
+    sim.pauseAfterMove = false;
+    sim.paused = true;
+    cancelAnimationFrame(sim.rafId);
+    closeDiskPopover();
+    if (step === moveNumber) {
+      updateStatus();
+      updateControls();
+      return;
+    }
+    seekToStep(step);
+  }
+
+  function diskRankFromTarget(target) {
+    if (!target || typeof target.closest !== "function") return null;
+    const disk = target.closest("[data-disk-rank]");
+    return disk ? Number(disk.dataset.diskRank) : null;
+  }
+
+  function handleDiskPointerOver(event) {
+    if (event.pointerType !== "mouse" || pinnedDiskRank !== null) return;
+    const rank = diskRankFromTarget(event.target);
+    if (!rank) return;
+    openDiskPopover(rank, false);
+  }
+
+  function handleDiskClick(event) {
+    const rank = diskRankFromTarget(event.target);
+    if (!rank) return;
+    event.preventDefault();
+    openDiskPopover(rank, true);
+  }
+
+  function handleDiskKeydown(event) {
+    const rank = diskRankFromTarget(event.target);
+    if (!rank) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openDiskPopover(rank, true);
+  }
+
   function setRecursionStep(step) {
     const nextStep = Math.max(0, Math.min(5, step));
     const captions = [
@@ -1364,62 +1632,121 @@
 
   function initScrollEffects() {
     document.documentElement.classList.add("js");
-    const reveals = [...document.querySelectorAll(".reveal")];
+    document.querySelectorAll("[data-reveal-group]").forEach((group) => {
+      [...group.children].forEach((child, index) => {
+        child.style.setProperty(
+          "--reveal-delay",
+          `${Math.min(index * 90, 450)}ms`
+        );
+      });
+    });
+    const reveals = [
+      ...document.querySelectorAll(
+        ".reveal, [data-reveal], [data-reveal-group] > *"
+      ),
+    ];
     const sections = [...document.querySelectorAll("main .page-section[id]")];
     const navLinks = [...el.sectionNav.querySelectorAll("a")];
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
 
     if (!("IntersectionObserver" in window)) {
       reveals.forEach((item) => item.classList.add("is-visible"));
       return;
     }
 
-    const revealObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            revealObserver.unobserve(entry.target);
+    if (reduceMotion) {
+      reveals.forEach((item) => item.classList.add("is-visible"));
+    } else {
+      const revealObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              revealObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.12 }
+      );
+      reveals.forEach((item) => revealObserver.observe(item));
+    }
+
+    if (!reduceMotion) {
+      const navObserver = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (!visible) return;
+          navLinks.forEach((link) => {
+            link.classList.toggle(
+              "active",
+              link.getAttribute("href") === `#${visible.target.id}`
+            );
+          });
+        },
+        { rootMargin: "-25% 0px -60% 0px", threshold: [0, 0.2, 0.5] }
+      );
+      sections.forEach((section) => navObserver.observe(section));
+    }
+
+    let scrollFrame = 0;
+    const updateScrollProgress = () => {
+      const scrollable =
+        document.documentElement.scrollHeight - window.innerHeight;
+      const progress =
+        scrollable > 0 ? Math.min(1, window.scrollY / scrollable) : 0;
+      el.scrollProgressBar.style.transform = `scaleX(${progress})`;
+      scrollFrame = 0;
+    };
+    window.addEventListener(
+      "scroll",
+      () => {
+        if (scrollFrame) return;
+        scrollFrame = requestAnimationFrame(updateScrollProgress);
+      },
+      { passive: true }
+    );
+    window.addEventListener("resize", updateScrollProgress);
+    updateScrollProgress();
+
+    const finePointer = window.matchMedia("(pointer: fine)").matches;
+    if (!reduceMotion && finePointer && el.heroVisual) {
+      el.heroSection.addEventListener("pointermove", (event) => {
+        const rect = el.heroSection.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width - 0.5;
+        const y = (event.clientY - rect.top) / rect.height - 0.5;
+        el.heroVisual.style.setProperty("--parallax-x", `${x * 10}px`);
+        el.heroVisual.style.setProperty("--parallax-y", `${y * 8}px`);
+      });
+      el.heroSection.addEventListener("pointerleave", () => {
+        el.heroVisual.style.setProperty("--parallax-x", "0px");
+        el.heroVisual.style.setProperty("--parallax-y", "0px");
+      });
+    }
+
+    if (!reduceMotion) {
+      const principleSection = document.getElementById("principle");
+      const principleObserver = new IntersectionObserver(
+        (entries) => {
+          if (
+            !principlePlayed &&
+            entries.some(
+              (entry) =>
+                entry.isIntersecting && entry.intersectionRatio >= 0.45
+            )
+          ) {
+            principlePlayed = true;
+            startPrincipleAnimation();
+            principleObserver.disconnect();
           }
-        });
-      },
-      { threshold: 0.12 }
-    );
-    reveals.forEach((item) => revealObserver.observe(item));
-
-    const navObserver = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (!visible) return;
-        navLinks.forEach((link) => {
-          link.classList.toggle(
-            "active",
-            link.getAttribute("href") === `#${visible.target.id}`
-          );
-        });
-      },
-      { rootMargin: "-25% 0px -60% 0px", threshold: [0, 0.2, 0.5] }
-    );
-    sections.forEach((section) => navObserver.observe(section));
-
-    const principleSection = document.getElementById("principle");
-    const principleObserver = new IntersectionObserver(
-      (entries) => {
-        if (
-          !principlePlayed &&
-          entries.some(
-            (entry) => entry.isIntersecting && entry.intersectionRatio >= 0.45
-          )
-        ) {
-          principlePlayed = true;
-          startPrincipleAnimation();
-          principleObserver.disconnect();
-        }
-      },
-      { threshold: [0.45] }
-    );
-    principleObserver.observe(principleSection);
+        },
+        { threshold: [0.45] }
+      );
+      principleObserver.observe(principleSection);
+    }
   }
 
   function bindEvents() {
@@ -1471,6 +1798,7 @@
     });
 
     el.btnRun.addEventListener("click", runAction);
+    el.btnPrev.addEventListener("click", runPreviousStep);
     el.btnStep.addEventListener("click", runManualStep);
     el.btnReset.addEventListener("click", stopAndReset);
     el.modeManual.addEventListener("click", () => setDisplayMode("manual"));
@@ -1478,6 +1806,26 @@
     el.btnRecursionReplay.addEventListener("click", () => {
       principlePlayed = true;
       startPrincipleAnimation();
+    });
+    el.boardFrame.addEventListener("pointerover", handleDiskPointerOver);
+    el.boardFrame.addEventListener("click", handleDiskClick);
+    el.boardFrame.addEventListener("keydown", handleDiskKeydown);
+    el.boardFrame.addEventListener("pointerleave", () => {
+      if (pinnedDiskRank === null) closeDiskPopover();
+    });
+    el.diskPopoverClose.addEventListener("click", closeDiskPopover);
+    document.addEventListener("pointerdown", (event) => {
+      if (el.diskPopover.hidden) return;
+      if (
+        el.diskPopover.contains(event.target) ||
+        diskRankFromTarget(event.target)
+      ) {
+        return;
+      }
+      closeDiskPopover();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeDiskPopover();
     });
 
     el.speed.addEventListener("input", () => {
