@@ -61,10 +61,10 @@
               <rect class="mini-peg" x="128" y="118" width="10" height="200" rx="5"></rect>
               <rect class="mini-peg" x="275" y="118" width="10" height="200" rx="5"></rect>
               <rect class="mini-peg" x="422" y="118" width="10" height="200" rx="5"></rect>
-              <rect class="mini-disk disk-1" x="103" y="278" width="60" height="34" rx="8"></rect>
-              <rect class="mini-disk disk-2" x="86" y="246" width="94" height="34" rx="8"></rect>
-              <rect class="mini-disk disk-3" x="69" y="214" width="128" height="34" rx="8"></rect>
-              <rect class="mini-disk disk-4" x="52" y="182" width="162" height="34" rx="8"></rect>
+              <rect class="mini-disk disk-1" x="103" y="182" width="60" height="34" rx="8"></rect>
+              <rect class="mini-disk disk-2" x="86" y="214" width="94" height="34" rx="8"></rect>
+              <rect class="mini-disk disk-3" x="69" y="246" width="128" height="34" rx="8"></rect>
+              <rect class="mini-disk disk-4" x="52" y="278" width="162" height="34" rx="8"></rect>
               <text x="133" y="360">A</text>
               <text x="280" y="360">B</text>
               <text x="427" y="360">C</text>
@@ -189,28 +189,33 @@
                 <p class="section-kicker">n = 3 的递归拆解</p>
                 <h3>从一次调用，展开成一棵调用树</h3>
               </div>
-              <button class="btn" id="btn-recursion-replay" type="button">重播</button>
+              <div class="recursion-controls">
+                <span id="recursion-progress">0 / 11</span>
+                <button class="btn" id="btn-recursion-prev" type="button">上一步</button>
+                <button class="btn btn-primary" id="btn-recursion-next" type="button">下一步</button>
+                <button class="btn" id="btn-recursion-replay" type="button">重播</button>
+              </div>
             </div>
 
             <div class="recursion-stage" id="recursion-stage" data-step="0">
-              <div class="tree-root-node">move_tower(3, A, C, B)</div>
+              <div class="tree-root-node" data-recursion-step="1" data-recursion-reveal="0" tabindex="0" role="button">move_tower(3, A, C, B)</div>
               <div class="tree-connector" aria-hidden="true"></div>
               <div class="tree-children">
                 <div class="tree-branch tree-left">
-                  <div class="tree-node">move_tower(2, A, B, C)</div>
+                  <div class="tree-node" data-recursion-step="2" data-recursion-reveal="1" tabindex="0" role="button">move_tower(2, A, B, C)</div>
                   <div class="tree-substeps">
-                    <div class="tree-leaf">move_tower(1, A, C, B)</div>
-                    <div class="tree-move">移动 2 号盘：A → B</div>
-                    <div class="tree-leaf">move_tower(1, C, B, A)</div>
+                    <div class="tree-leaf" data-recursion-step="3" data-recursion-reveal="3" tabindex="0" role="button">move_tower(1, A, C, B)</div>
+                    <div class="tree-move" data-recursion-step="4" data-recursion-reveal="4" tabindex="0" role="button">移动 2 号盘：A → B</div>
+                    <div class="tree-leaf" data-recursion-step="5" data-recursion-reveal="5" tabindex="0" role="button">move_tower(1, C, B, A)</div>
                   </div>
                 </div>
-                <div class="tree-direct">直接移动 3 号盘：A → C</div>
+                <div class="tree-direct" data-recursion-step="6" data-recursion-reveal="1" tabindex="0" role="button">直接移动 3 号盘：A → C</div>
                 <div class="tree-branch tree-right">
-                  <div class="tree-node">move_tower(2, B, C, A)</div>
+                  <div class="tree-node" data-recursion-step="7" data-recursion-reveal="1" tabindex="0" role="button">move_tower(2, B, C, A)</div>
                   <div class="tree-substeps">
-                    <div class="tree-leaf">move_tower(1, B, A, C)</div>
-                    <div class="tree-move">移动 2 号盘：B → C</div>
-                    <div class="tree-leaf">move_tower(1, A, C, B)</div>
+                    <div class="tree-leaf" data-recursion-step="8" data-recursion-reveal="8" tabindex="0" role="button">move_tower(1, B, A, C)</div>
+                    <div class="tree-move" data-recursion-step="9" data-recursion-reveal="9" tabindex="0" role="button">移动 2 号盘：B → C</div>
+                    <div class="tree-leaf" data-recursion-step="10" data-recursion-reveal="10" tabindex="0" role="button">move_tower(1, A, C, B)</div>
                   </div>
                 </div>
               </div>

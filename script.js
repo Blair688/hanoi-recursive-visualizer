@@ -55,6 +55,9 @@
     codeRight: document.getElementById("code-right"),
     recursionStage: document.getElementById("recursion-stage"),
     recursionCaption: document.getElementById("recursion-caption"),
+    recursionProgress: document.getElementById("recursion-progress"),
+    btnRecursionPrev: document.getElementById("btn-recursion-prev"),
+    btnRecursionNext: document.getElementById("btn-recursion-next"),
     btnRecursionReplay: document.getElementById("btn-recursion-replay"),
     sectionNav: document.getElementById("section-nav"),
     scrollProgressBar: document.getElementById("scroll-progress-bar"),
@@ -74,6 +77,8 @@
   let displayMode = "manual";
   let principleTimer = 0;
   let principlePlayed = false;
+  let principleManual = false;
+  const PRINCIPLE_LAST_STEP = 11;
   let reverseAnimation = null;
   let reverseRaf = 0;
   let pinnedDiskRank = null;
@@ -1586,17 +1591,46 @@
   }
 
   function setRecursionStep(step) {
-    const nextStep = Math.max(0, Math.min(5, step));
+    const nextStep = Math.max(
+      0,
+      Math.min(PRINCIPLE_LAST_STEP, step)
+    );
     const captions = [
       "从最大的问题开始：把 3 个盘从 A 移到 C。",
       "第一步：先解决左递归，把上面 2 个盘从 A 移到 B。",
-      "左递归继续拆分：先移动 1 号盘，再移动 2 号盘，最后移回 1 号盘。",
-      "左递归完成后，当前这一层只需要直接移动最大的 3 号盘。",
-      "最后解决右递归：把 B 上的 2 个盘移动到目标柱 C。",
-      "所有最小问题都直接移动 1 号盘，整棵递归树依次完成。",
+      "左递归本身也可以继续拆成三个动作。",
+      "左递归的第一件事：把 1 号盘从 A 移到 C。",
+      "左递归变空后，直接移动 2 号盘：A → B。",
+      "左递归的最后一步：把 1 号盘从 C 移到 B。",
+      "左递归完成后，当前这一层直接移动最大的 3 号盘：A → C。",
+      "现在轮到最后一部分：展开右递归，把 B 上的 2 个盘移到 C。",
+      "右递归的第一件事：把 1 号盘从 B 移到 A。",
+      "右递归变空后，直接移动 2 号盘：B → C。",
+      "右递归最后一步：把 1 号盘从 A 移到 C。",
+      "所有最小问题都完成了，整棵递归树按顺序返回。",
     ];
     el.recursionStage.dataset.step = String(nextStep);
     el.recursionCaption.textContent = captions[nextStep];
+    el.recursionProgress.textContent =
+      `${nextStep} / ${PRINCIPLE_LAST_STEP}`;
+    el.btnRecursionPrev.disabled = nextStep === 0;
+    el.btnRecursionNext.disabled = nextStep === PRINCIPLE_LAST_STEP;
+
+    for (const node of el.recursionStage.querySelectorAll(
+      "[data-recursion-step]"
+    )) {
+      const nodeStep = Number(node.dataset.recursionStep);
+      const revealStep = Number(node.dataset.recursionReveal);
+      node.classList.toggle(
+        "is-revealed",
+        Number.isFinite(revealStep) && revealStep <= nextStep
+      );
+      node.classList.toggle("is-current", nodeStep === nextStep);
+    }
+    el.recursionStage.classList.toggle(
+      "is-complete",
+      nextStep === PRINCIPLE_LAST_STEP
+    );
   }
 
   function stopPrincipleAnimation() {
@@ -1608,11 +1642,12 @@
 
   function startPrincipleAnimation() {
     stopPrincipleAnimation();
+    principleManual = false;
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches;
     if (reduceMotion) {
-      setRecursionStep(5);
+      setRecursionStep(PRINCIPLE_LAST_STEP);
       return;
     }
 
@@ -1621,13 +1656,39 @@
     const advance = () => {
       step += 1;
       setRecursionStep(step);
-      if (step < 5) {
-        principleTimer = setTimeout(advance, 900);
+      if (step < PRINCIPLE_LAST_STEP) {
+        principleTimer = setTimeout(advance, 760);
       } else {
         principleTimer = 0;
       }
     };
-    principleTimer = setTimeout(advance, 650);
+    principleTimer = setTimeout(advance, 520);
+  }
+
+  function setPrincipleManualStep(step) {
+    stopPrincipleAnimation();
+    principleManual = true;
+    setRecursionStep(step);
+  }
+
+  function handlePrincipleNodeClick(event) {
+    const node =
+      event.target instanceof Element
+        ? event.target.closest("[data-recursion-step]")
+        : null;
+    if (!node || !el.recursionStage.contains(node)) return;
+    setPrincipleManualStep(Number(node.dataset.recursionStep));
+  }
+
+  function handlePrincipleNodeKeydown(event) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const node =
+      event.target instanceof Element
+        ? event.target.closest("[data-recursion-step]")
+        : null;
+    if (!node) return;
+    event.preventDefault();
+    setPrincipleManualStep(Number(node.dataset.recursionStep));
   }
 
   function initScrollEffects() {
@@ -1807,6 +1868,19 @@
       principlePlayed = true;
       startPrincipleAnimation();
     });
+    el.btnRecursionPrev.addEventListener("click", () => {
+      const current = Number(el.recursionStage.dataset.step);
+      setPrincipleManualStep(current - 1);
+    });
+    el.btnRecursionNext.addEventListener("click", () => {
+      const current = Number(el.recursionStage.dataset.step);
+      setPrincipleManualStep(current + 1);
+    });
+    el.recursionStage.addEventListener("click", handlePrincipleNodeClick);
+    el.recursionStage.addEventListener(
+      "keydown",
+      handlePrincipleNodeKeydown
+    );
     el.boardFrame.addEventListener("pointerover", handleDiskPointerOver);
     el.boardFrame.addEventListener("click", handleDiskClick);
     el.boardFrame.addEventListener("keydown", handleDiskKeydown);
@@ -1838,7 +1912,7 @@
     rods = makeInitialRods();
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       principlePlayed = true;
-      setRecursionStep(5);
+      setRecursionStep(PRINCIPLE_LAST_STEP);
     } else {
       setRecursionStep(0);
     }
